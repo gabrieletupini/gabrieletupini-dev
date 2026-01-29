@@ -108,7 +108,7 @@ jobs:
           # Audit npm packages for production vulnerabilities only
           echo "🔒 Checking production dependencies for vulnerabilities..."
           npm audit --audit-level=moderate --production || echo "⚠️ Production vulnerabilities found but continuing..."
-          
+
           echo "📋 Full audit report (including dev dependencies):"
           npm audit --audit-level=low || true
 
@@ -123,7 +123,8 @@ jobs:
       - name: 🏗️ Build Website
         run: |
           echo "Building website..."
-          ./deploy.sh build
+          chmod +x deploy.sh
+          bash deploy.sh build
 
       - name: 🔍 Build Validation
         run: |
