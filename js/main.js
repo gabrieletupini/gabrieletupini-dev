@@ -22,9 +22,9 @@
 const CONFIG = {
     // EmailJS Configuration
     emailjs: {
-        serviceId: 'service_showcase',
-        templateId: 'template_contact',
-        publicKey: 'your_emailjs_public_key'
+        serviceId: 'service_zgf03ey',
+        templateId: 'template_7r3r8rd',
+        publicKey: 'd09HeaQfradvNnLgt'
     },
 
     // Animation Settings
