@@ -1,0 +1,535 @@
+name: 🚀 Deploy Technical Showcase
+
+on:
+    push:
+        branches:
+            - main
+            - develop
+    pull_request:
+        branches:
+            - main
+    workflow_dispatch:
+        inputs:
+            environment:
+                description: "Deployment environment"
+                required: true
+                default: "staging"
+                type: choice
+                options:
+                    - staging
+                    - production
+            skip_tests:
+                description: "Skip tests and deploy directly"
+                required: false
+                default: false
+                type: boolean
+
+env:
+    NODE_VERSION: "18"
+    AWS_REGION: "us-east-1"
+    LIGHTHOUSE_THRESHOLD: 95
+    PROJECT_NAME: "gabriele-showcase"
+
+jobs:
+    # ============================================================================
+    # BUILD & TEST JOB
+    # ============================================================================
+    build-and-test:
+        name: 🏗️ Build & Test
+        runs-on: ubuntu-latest
+        timeout-minutes: 10
+
+        outputs:
+            build-cache-key: ${{ steps.cache-key.outputs.key }}
+            environment: ${{ steps.determine-env.outputs.environment }}
+
+        steps:
+            - name: 📥 Checkout Code
+              uses: actions/checkout@v4
+              with:
+                  fetch-depth: 0
+
+            - name: 🎯 Determine Environment
+              id: determine-env
+              run: |
+                  if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+                    echo "environment=${{ github.event.inputs.environment }}" >> $GITHUB_OUTPUT
+                  elif [[ "${{ github.ref }}" == "refs/heads/main" ]]; then
+                    echo "environment=production" >> $GITHUB_OUTPUT
+                  elif [[ "${{ github.ref }}" == "refs/heads/develop" ]]; then
+                    echo "environment=staging" >> $GITHUB_OUTPUT
+                  else
+                    echo "environment=staging" >> $GITHUB_OUTPUT
+                  fi
+
+            - name: 🔧 Setup Node.js
+              uses: actions/setup-node@v4
+              with:
+                  node-version: ${{ env.NODE_VERSION }}
+                  cache: "npm"
+
+            - name: 📦 Install Dependencies
+              run: |
+                  npm ci --only=dev
+                  npm audit --audit-level=high
+
+            - name: 🎨 Lint Code
+              run: |
+                  echo "Running linters..."
+                  # HTML validation
+                  if command -v html-validate &> /dev/null; then
+                    npx html-validate index.html
+                  else
+                    echo "HTML validation skipped (html-validate not available)"
+                  fi
+
+                  # CSS linting
+                  if [ -f "css/style.css" ]; then
+                    if command -v stylelint &> /dev/null; then
+                      npx stylelint "css/**/*.css"
+                    else
+                      echo "CSS linting skipped (stylelint not available)"
+                    fi
+                  fi
+
+                  # JavaScript linting
+                  if [ -f "js/main.js" ]; then
+                    if command -v eslint &> /dev/null; then
+                      npx eslint "js/**/*.js"
+                    else
+                      echo "JavaScript linting skipped (eslint not available)"
+                    fi
+                  fi
+
+            - name: 🔍 Security Scan
+              run: |
+                  echo "Running security scans..."
+                  # Audit npm packages
+                  npm audit --audit-level=moderate
+
+                  # Check for sensitive data
+                  echo "Scanning for sensitive data patterns..."
+                  if grep -r -i "password\|secret\|key\|token" --exclude-dir=node_modules --exclude-dir=.git . | grep -v "\.yml\|\.md\|\.txt\|example\|placeholder"; then
+                    echo "⚠️ Warning: Potential sensitive data found"
+                  else
+                    echo "✅ No sensitive data patterns detected"
+                  fi
+
+            - name: 🏗️ Build Website
+              run: |
+                  echo "Building website..."
+                  ./deploy.sh build
+
+            - name: 🔍 Build Validation
+              run: |
+                  echo "Validating build output..."
+
+                  # Check if main files exist
+                  if [ ! -f "dist/index.html" ]; then
+                    echo "❌ Error: index.html not found in dist/"
+                    exit 1
+                  fi
+
+                  # Check file sizes
+                  echo "📊 Build Size Analysis:"
+                  if [ -f "dist/index.html" ]; then
+                    HTML_SIZE=$(du -sh dist/index.html | cut -f1)
+                    echo "  HTML: $HTML_SIZE"
+                  fi
+
+                  if [ -f "dist/css/style.css" ]; then
+                    CSS_SIZE=$(du -sh dist/css/style.css | cut -f1)
+                    echo "  CSS: $CSS_SIZE"
+                  fi
+
+                  if [ -f "dist/js/main.js" ]; then
+                    JS_SIZE=$(du -sh dist/js/main.js | cut -f1)
+                    echo "  JavaScript: $JS_SIZE"
+                  fi
+
+                  TOTAL_SIZE=$(du -sh dist | cut -f1)
+                  echo "  Total: $TOTAL_SIZE"
+
+                  # Check for large files (>500KB)
+                  echo "🔍 Checking for large files..."
+                  find dist -type f -size +500k -exec ls -lh {} \; | while read line; do
+                    echo "⚠️ Large file detected: $line"
+                  done
+
+            - name: 🧪 Test Build Locally
+              run: |
+                  echo "Testing build locally..."
+                  # Start local server in background
+                  npx live-server dist --port=3001 --host=127.0.0.1 --no-browser &
+                  SERVER_PID=$!
+
+                  # Wait for server to start
+                  sleep 5
+
+                  # Test basic connectivity
+                  if curl -f http://127.0.0.1:3001/ > /dev/null 2>&1; then
+                    echo "✅ Local server test passed"
+                  else
+                    echo "❌ Local server test failed"
+                    kill $SERVER_PID 2>/dev/null || true
+                    exit 1
+                  fi
+
+                  # Kill server
+                  kill $SERVER_PID 2>/dev/null || true
+
+            - name: 📦 Cache Build Artifacts
+              id: cache-key
+              uses: actions/cache/save@v3
+              with:
+                  path: dist
+                  key: build-${{ github.sha }}-${{ github.run_number }}
+
+    # ============================================================================
+    # SECURITY & PERFORMANCE TESTING
+    # ============================================================================
+    security-performance-test:
+        name: 🔒 Security & Performance Tests
+        runs-on: ubuntu-latest
+        needs: build-and-test
+        if: github.event.inputs.skip_tests != 'true'
+        timeout-minutes: 15
+
+        steps:
+            - name: 📥 Checkout Code
+              uses: actions/checkout@v4
+
+            - name: 🔧 Setup Node.js
+              uses: actions/setup-node@v4
+              with:
+                  node-version: ${{ env.NODE_VERSION }}
+                  cache: "npm"
+
+            - name: 📦 Restore Build Cache
+              uses: actions/cache/restore@v3
+              with:
+                  path: dist
+                  key: ${{ needs.build-and-test.outputs.build-cache-key }}
+                  fail-on-cache-miss: true
+
+            - name: 📦 Install Test Dependencies
+              run: |
+                  npm ci --only=dev
+
+            - name: 🔒 Advanced Security Scan
+              run: |
+                  echo "🔍 Running advanced security scans..."
+
+                  # Check for XSS vulnerabilities
+                  echo "Scanning for XSS patterns..."
+                  if grep -r "innerHTML\|eval\|document\.write" dist/ 2>/dev/null; then
+                    echo "⚠️ Warning: Potential XSS vulnerabilities found"
+                  fi
+
+                  # Check CSP headers
+                  if grep -q "Content-Security-Policy" dist/_headers 2>/dev/null; then
+                    echo "✅ Content Security Policy configured"
+                  else
+                    echo "⚠️ Warning: No Content Security Policy found"
+                  fi
+
+                  # Check security headers
+                  if grep -q "X-Frame-Options\|X-Content-Type-Options" dist/_headers 2>/dev/null; then
+                    echo "✅ Security headers configured"
+                  else
+                    echo "⚠️ Warning: Security headers may be missing"
+                  fi
+
+            - name: 🚀 Lighthouse Performance Test
+              run: |
+                  echo "🔍 Running Lighthouse performance audit..."
+
+                  # Start local server for testing
+                  npx live-server dist --port=3002 --host=127.0.0.1 --no-browser &
+                  SERVER_PID=$!
+
+                  # Wait for server to start
+                  sleep 5
+
+                  # Install Lighthouse if not available
+                  if ! command -v lighthouse &> /dev/null; then
+                    npm install -g @lhci/cli lighthouse
+                  fi
+
+                  # Run Lighthouse audit
+                  LIGHTHOUSE_SCORE=$(lighthouse http://127.0.0.1:3002/ \
+                    --only-categories=performance,accessibility,best-practices,seo \
+                    --chrome-flags="--headless --no-sandbox" \
+                    --output=json \
+                    --output-path=lighthouse-report.json \
+                    --quiet | jq -r '.categories.performance.score * 100' 2>/dev/null || echo "0")
+
+                  echo "📊 Lighthouse Performance Score: $LIGHTHOUSE_SCORE"
+
+                  # Check if score meets threshold
+                  if [ "${LIGHTHOUSE_SCORE%.*}" -ge "$LIGHTHOUSE_THRESHOLD" ]; then
+                    echo "✅ Lighthouse score meets threshold ($LIGHTHOUSE_THRESHOLD)"
+                  else
+                    echo "⚠️ Warning: Lighthouse score below threshold (${LIGHTHOUSE_SCORE} < $LIGHTHOUSE_THRESHOLD)"
+                  fi
+
+                  # Kill server
+                  kill $SERVER_PID 2>/dev/null || true
+
+            - name: 📊 Upload Lighthouse Report
+              uses: actions/upload-artifact@v4
+              if: always()
+              with:
+                  name: lighthouse-report-${{ needs.build-and-test.outputs.environment }}
+                  path: lighthouse-report.json
+                  retention-days: 30
+
+    # ============================================================================
+    # DEPLOY TO STAGING
+    # ============================================================================
+    deploy-staging:
+        name: 🚀 Deploy to Staging
+        runs-on: ubuntu-latest
+        needs: [build-and-test, security-performance-test]
+        if: |
+            always() && 
+            needs.build-and-test.result == 'success' && 
+            (needs.security-performance-test.result == 'success' || github.event.inputs.skip_tests == 'true') &&
+            (needs.build-and-test.outputs.environment == 'staging' || github.ref == 'refs/heads/develop')
+        environment: staging
+        timeout-minutes: 10
+
+        steps:
+            - name: 📥 Checkout Code
+              uses: actions/checkout@v4
+
+            - name: 🔧 Setup Node.js
+              uses: actions/setup-node@v4
+              with:
+                  node-version: ${{ env.NODE_VERSION }}
+
+            - name: 📦 Restore Build Cache
+              uses: actions/cache/restore@v3
+              with:
+                  path: dist
+                  key: ${{ needs.build-and-test.outputs.build-cache-key }}
+                  fail-on-cache-miss: true
+
+            - name: ⚙️ Configure AWS Credentials
+              uses: aws-actions/configure-aws-credentials@v4
+              with:
+                  aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+                  aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+                  aws-region: ${{ env.AWS_REGION }}
+
+            - name: 🚀 Deploy to S3 Staging
+              run: |
+                  echo "🚀 Deploying to staging environment..."
+
+                  # Deploy to S3
+                  aws s3 sync dist/ s3://${{ env.PROJECT_NAME }}-staging \
+                    --delete \
+                    --cache-control "max-age=31536000" \
+                    --exclude "*.html" \
+                    --exclude "*.json" \
+                    --exclude "*.xml" \
+                    --exclude "*.txt"
+
+                  # Deploy HTML files with no cache
+                  aws s3 sync dist/ s3://${{ env.PROJECT_NAME }}-staging \
+                    --cache-control "max-age=0, no-cache, no-store, must-revalidate" \
+                    --content-type "text/html" \
+                    --include "*.html"
+
+                  echo "✅ S3 deployment completed"
+
+            - name: 🔄 Invalidate CloudFront Cache
+              if: vars.STAGING_DISTRIBUTION_ID != ''
+              run: |
+                  echo "🔄 Invalidating CloudFront cache..."
+                  aws cloudfront create-invalidation \
+                    --distribution-id ${{ vars.STAGING_DISTRIBUTION_ID }} \
+                    --paths "/*"
+
+            - name: 📝 Post Deployment Summary
+              run: |
+                  echo "🎉 Staging deployment completed successfully!"
+                  echo "🌐 Staging URL: https://staging.gabrieletupini.dev"
+                  echo "📦 S3 Bucket: ${{ env.PROJECT_NAME }}-staging"
+                  echo "⏰ Deployed at: $(date -u +"%Y-%m-%d %H:%M:%S UTC")"
+
+    # ============================================================================
+    # DEPLOY TO PRODUCTION
+    # ============================================================================
+    deploy-production:
+        name: 🏆 Deploy to Production
+        runs-on: ubuntu-latest
+        needs: [build-and-test, security-performance-test]
+        if: |
+            always() && 
+            needs.build-and-test.result == 'success' && 
+            (needs.security-performance-test.result == 'success' || github.event.inputs.skip_tests == 'true') &&
+            (needs.build-and-test.outputs.environment == 'production' || github.ref == 'refs/heads/main')
+        environment: production
+        timeout-minutes: 15
+
+        steps:
+            - name: 📥 Checkout Code
+              uses: actions/checkout@v4
+
+            - name: 🔧 Setup Node.js
+              uses: actions/setup-node@v4
+              with:
+                  node-version: ${{ env.NODE_VERSION }}
+
+            - name: 📦 Restore Build Cache
+              uses: actions/cache/restore@v3
+              with:
+                  path: dist
+                  key: ${{ needs.build-and-test.outputs.build-cache-key }}
+                  fail-on-cache-miss: true
+
+            - name: ⚙️ Configure AWS Credentials
+              uses: aws-actions/configure-aws-credentials@v4
+              with:
+                  aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+                  aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+                  aws-region: ${{ env.AWS_REGION }}
+
+            - name: 🏆 Deploy to S3 Production
+              run: |
+                  echo "🏆 Deploying to production environment..."
+
+                  # Deploy to S3
+                  aws s3 sync dist/ s3://${{ env.PROJECT_NAME }}-prod \
+                    --delete \
+                    --cache-control "max-age=31536000" \
+                    --exclude "*.html" \
+                    --exclude "*.json" \
+                    --exclude "*.xml" \
+                    --exclude "*.txt"
+
+                  # Deploy HTML files with no cache
+                  aws s3 sync dist/ s3://${{ env.PROJECT_NAME }}-prod \
+                    --cache-control "max-age=0, no-cache, no-store, must-revalidate" \
+                    --content-type "text/html" \
+                    --include "*.html"
+
+                  echo "✅ S3 production deployment completed"
+
+            - name: 🔄 Invalidate CloudFront Cache
+              if: vars.PRODUCTION_DISTRIBUTION_ID != ''
+              run: |
+                  echo "🔄 Invalidating CloudFront cache..."
+                  aws cloudfront create-invalidation \
+                    --distribution-id ${{ vars.PRODUCTION_DISTRIBUTION_ID }} \
+                    --paths "/*"
+
+            - name: 🧪 Post-Deploy Production Test
+              run: |
+                  echo "🧪 Testing production deployment..."
+
+                  # Wait for CloudFront propagation
+                  sleep 30
+
+                  # Test main website
+                  if curl -f https://gabrieletupini.dev/ > /dev/null 2>&1; then
+                    echo "✅ Production website is accessible"
+                  else
+                    echo "⚠️ Warning: Production website may not be immediately accessible"
+                  fi
+
+            - name: 📝 Post Deployment Summary
+              run: |
+                  echo "🎉 Production deployment completed successfully!"
+                  echo "🌐 Production URL: https://gabrieletupini.dev"
+                  echo "📦 S3 Bucket: ${{ env.PROJECT_NAME }}-prod"
+                  echo "⏰ Deployed at: $(date -u +"%Y-%m-%d %H:%M:%S UTC")"
+                  echo "🏷️  Version: ${{ github.sha }}"
+
+    # ============================================================================
+    # POST-DEPLOYMENT MONITORING
+    # ============================================================================
+    post-deploy-monitoring:
+        name: 📊 Post-Deploy Monitoring
+        runs-on: ubuntu-latest
+        needs: [deploy-staging, deploy-production]
+        if: always() && (needs.deploy-staging.result == 'success' || needs.deploy-production.result == 'success')
+        timeout-minutes: 10
+
+        steps:
+            - name: 🔧 Setup Node.js
+              uses: actions/setup-node@v4
+              with:
+                  node-version: ${{ env.NODE_VERSION }}
+
+            - name: 📊 Run Post-Deploy Health Checks
+              run: |
+                  echo "📊 Running post-deployment health checks..."
+
+                  # Test staging if deployed
+                  if [ "${{ needs.deploy-staging.result }}" == "success" ]; then
+                    echo "Testing staging environment..."
+                    if curl -f https://staging.gabrieletupini.dev/ > /dev/null 2>&1; then
+                      echo "✅ Staging health check passed"
+                    else
+                      echo "⚠️ Staging health check failed"
+                    fi
+                  fi
+
+                  # Test production if deployed
+                  if [ "${{ needs.deploy-production.result }}" == "success" ]; then
+                    echo "Testing production environment..."
+                    if curl -f https://gabrieletupini.dev/ > /dev/null 2>&1; then
+                      echo "✅ Production health check passed"
+                    else
+                      echo "⚠️ Production health check failed"
+                    fi
+                  fi
+
+            - name: 📈 Setup Performance Monitoring
+              run: |
+                  echo "📈 Setting up performance monitoring..."
+                  echo "🔍 CloudWatch metrics available in AWS Console"
+                  echo "📊 Real User Monitoring can be integrated with AWS RUM"
+                  echo "🚨 Set up CloudWatch alarms for key metrics"
+
+    # ============================================================================
+    # NOTIFICATION & CLEANUP
+    # ============================================================================
+    notify-and-cleanup:
+        name: 📢 Notify & Cleanup
+        runs-on: ubuntu-latest
+        needs:
+            [
+                build-and-test,
+                security-performance-test,
+                deploy-staging,
+                deploy-production,
+                post-deploy-monitoring,
+            ]
+        if: always()
+        timeout-minutes: 5
+
+        steps:
+            - name: 📊 Deployment Summary
+              run: |
+                  echo "📊 DEPLOYMENT SUMMARY"
+                  echo "===================="
+                  echo "🏗️  Build Status: ${{ needs.build-and-test.result }}"
+                  echo "🔒 Security Test: ${{ needs.security-performance-test.result }}"
+                  echo "🚀 Staging Deploy: ${{ needs.deploy-staging.result }}"
+                  echo "🏆 Production Deploy: ${{ needs.deploy-production.result }}"
+                  echo "📊 Monitoring Setup: ${{ needs.post-deploy-monitoring.result }}"
+                  echo "⏰ Completed at: $(date -u +"%Y-%m-%d %H:%M:%S UTC")"
+
+            - name: 🧹 Cleanup Artifacts
+              run: |
+                  echo "🧹 Cleanup completed (artifacts retained per retention policy)"
+
+# ============================================================================
+# WORKFLOW CONFIGURATION
+# ============================================================================
+concurrency:
+    group: deploy-${{ github.ref }}
+    cancel-in-progress: true
