@@ -819,6 +819,29 @@ class ContactFormManager {
             templateParams.user_agent = navigator.userAgent;
             templateParams.page_url = window.location.href;
 
+            // Ensure all required fields are properly mapped
+            templateParams.from_name = templateParams.name || 'Unknown';
+            templateParams.from_email = templateParams.email || 'noreply@example.com';
+            templateParams.reply_to = templateParams.email || 'noreply@example.com';
+            templateParams.user_name = templateParams.name || 'Unknown';
+            templateParams.user_email = templateParams.email || 'noreply@example.com';
+            templateParams.project_budget = templateParams.budget || 'Not specified';
+            templateParams.service_type = templateParams.service || 'Not specified';
+            templateParams.project_timeline = templateParams.timeline || 'Not specified';
+            templateParams.company_name = templateParams.company || 'Not specified';
+            
+            // Alternative variable names that might be used in the template
+            templateParams.to_name = 'Gabriele Tupini';
+            templateParams.contact_name = templateParams.name;
+            templateParams.contact_email = templateParams.email;
+            templateParams.contact_company = templateParams.company;
+            templateParams.contact_budget = templateParams.budget;
+            templateParams.contact_service = templateParams.service;
+            templateParams.contact_timeline = templateParams.timeline;
+            templateParams.contact_message = templateParams.message;
+
+            console.log('Sending EmailJS with params:', templateParams); // Debug log
+
             // Send email via EmailJS
             await emailjs.send(
                 CONFIG.emailjs.serviceId,
