@@ -12,7 +12,7 @@
         "build": "npm run clean && npm run optimize && npm run generate-sitemap",
         "clean": "rimraf dist",
         "optimize": "npm run optimize:html && npm run optimize:css && npm run optimize:js && npm run copy:assets",
-        "optimize:html": "html-minifier-terser --input-dir . --output-dir dist --file-ext html --collapse-whitespace --remove-comments --remove-redundant-attributes --use-short-doctype --remove-empty-attributes --remove-script-type-attrs --remove-style-link-type-attrs --minify-css true --minify-js true",
+        "optimize:html": "html-minifier-terser --input-dir . --output-dir dist --file-ext html --collapse-whitespace --remove-comments --remove-redundant-attributes --use-short-doctype --remove-empty-attributes --minify-css true --minify-js true",
         "optimize:css": "cleancss -o dist/css/style.css css/style.css",
         "optimize:js": "terser js/main.js --compress --mangle --output dist/js/main.js --source-map",
         "copy:assets": "npm run copy:images && npm run copy:fonts && npm run copy:docs",

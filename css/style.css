@@ -161,6 +161,8 @@ html {
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
     text-rendering: optimizeLegibility;
+    -webkit-text-size-adjust: 100%;
+    -webkit-tap-highlight-color: rgba(0, 0, 0, 0);
 }
 
 body {
@@ -170,6 +172,8 @@ body {
     font-size: var(--text-base);
     line-height: 1.7;
     overflow-x: hidden;
+    -webkit-overflow-scrolling: touch;
+    scroll-behavior: smooth;
 }
 
 /* ==========================================================================
@@ -305,6 +309,7 @@ a:focus {
     align-items: center;
     gap: var(--space-2);
     padding: var(--space-3) var(--space-6);
+    min-height: 44px;
     border: none;
     border-radius: var(--radius-lg);
     font-size: var(--text-base);
@@ -314,6 +319,7 @@ a:focus {
     transition: all var(--transition-normal);
     position: relative;
     overflow: hidden;
+    touch-action: manipulation;
 }
 
 .btn::before {
@@ -536,7 +542,12 @@ a:focus {
     background: none;
     border: none;
     cursor: pointer;
-    padding: var(--space-2);
+    padding: var(--space-3);
+    min-width: 44px;
+    min-height: 44px;
+    justify-content: center;
+    align-items: center;
+    touch-action: manipulation;
 }
 
 .bar {
@@ -579,9 +590,15 @@ a:focus {
     }
 
     .nav-link {
-        display: block;
-        padding: var(--space-4);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: var(--space-5) var(--space-4);
+        min-height: 48px;
         width: 100%;
+        text-align: center;
+        font-size: var(--text-lg);
+        touch-action: manipulation;
     }
 }
 
@@ -1738,13 +1755,15 @@ a:focus {
 .form-group select,
 .form-group textarea {
     width: 100%;
-    padding: var(--space-3) var(--space-4);
+    padding: var(--space-4) var(--space-4);
+    min-height: 48px;
     border: 2px solid var(--border-light);
     border-radius: var(--radius-lg);
     font-size: var(--text-base);
     font-family: inherit;
     transition: border-color var(--transition-fast);
     background: var(--bg-primary);
+    touch-action: manipulation;
 }
 
 .form-group input:focus,
@@ -2175,34 +2194,193 @@ a:focus {
     }
 }
 
+/* Additional tablet and large phone optimizations */
+@media (max-width: 640px) {
+    .hero-container {
+        text-align: center;
+        padding: 0 var(--space-6);
+    }
+
+    .hero-content {
+        max-width: 100%;
+    }
+
+    .hero-title {
+        text-align: center;
+    }
+
+    .hero-buttons {
+        justify-content: center;
+        flex-wrap: wrap;
+        max-width: 400px;
+        margin: 0 auto;
+    }
+
+    .btn {
+        flex: 1;
+        min-width: 140px;
+        max-width: 180px;
+    }
+
+    .projects-grid {
+        grid-template-columns: 1fr;
+        max-width: 600px;
+        margin: 0 auto;
+    }
+
+    .skills-nav {
+        grid-template-columns: repeat(2, 1fr);
+        max-width: 500px;
+        margin: 0 auto;
+    }
+
+    .testimonials-grid {
+        grid-template-columns: 1fr;
+        max-width: 600px;
+        margin: 0 auto;
+    }
+}
+
 @media (max-width: 480px) {
     .container {
         padding: 0 var(--space-4);
     }
 
     .hero-stats {
-        grid-template-columns: repeat(2, 1fr);
+        grid-template-columns: 1fr;
+        gap: var(--space-3);
     }
 
     .hero-buttons {
         flex-direction: column;
         align-items: center;
+        gap: var(--space-4);
     }
 
     .btn {
         width: 100%;
         justify-content: center;
-        max-width: 280px;
+        max-width: 320px;
+        min-height: 48px;
+        font-size: var(--text-base);
+        padding: var(--space-4) var(--space-6);
     }
 
     .skills-nav {
-        grid-template-columns: repeat(2, 1fr);
-        gap: var(--space-2);
+        grid-template-columns: 1fr;
+        gap: var(--space-3);
     }
 
     .skill-nav-btn {
-        font-size: var(--text-sm);
-        padding: var(--space-2) var(--space-4);
+        font-size: var(--text-base);
+        padding: var(--space-3) var(--space-4);
+        min-height: 48px;
+    }
+
+    /* Better mobile section spacing */
+    section {
+        padding: var(--space-12) 0;
+    }
+
+    .hero {
+        padding: var(--space-8) 0;
+        min-height: auto;
+    }
+
+    /* Improve mobile typography */
+    .hero-name {
+        font-size: clamp(1.75rem, 5vw, 2.5rem);
+        line-height: 1.1;
+    }
+
+    .hero-description {
+        font-size: var(--text-base);
+        line-height: 1.6;
+        margin-bottom: var(--space-6);
+    }
+
+    /* Better project card mobile layout */
+    .projects-grid {
+        grid-template-columns: 1fr;
+        gap: var(--space-6);
+    }
+
+    /* Improve mobile contact form */
+    .contact-form {
+        padding: var(--space-6);
+    }
+
+    .form-row {
+        grid-template-columns: 1fr;
+        gap: var(--space-4);
+    }
+
+    /* Additional mobile improvements */
+    .navbar {
+        padding: var(--space-4) 0;
+    }
+
+    .section-header {
+        margin-bottom: var(--space-8);
+        text-align: center;
+    }
+
+    .section-title {
+        font-size: clamp(1.5rem, 4vw, 2rem);
+        line-height: 1.2;
+    }
+
+    /* Better mobile project cards */
+    .project-card {
+        padding: var(--space-6);
+    }
+
+    .project-title {
+        font-size: var(--text-xl);
+        margin-bottom: var(--space-3);
+    }
+
+    .project-description {
+        font-size: var(--text-base);
+        line-height: 1.6;
+    }
+
+    /* Improve mobile stats */
+    .stats-item {
+        text-align: center;
+        padding: var(--space-4);
+    }
+
+    .stats-number {
+        font-size: clamp(1.25rem, 3vw, 1.5rem);
+    }
+
+    /* Better mobile skills display */
+    .skill-item {
+        padding: var(--space-3) var(--space-4);
+        font-size: var(--text-base);
+    }
+
+    /* Improve mobile testimonials */
+    .testimonial {
+        padding: var(--space-6);
+        text-align: center;
+    }
+
+    .testimonial-content {
+        font-size: var(--text-base);
+        line-height: 1.6;
+        margin-bottom: var(--space-4);
+    }
+
+    /* Better mobile footer */
+    .footer-content {
+        text-align: center;
+        gap: var(--space-6);
+    }
+
+    .footer-section {
+        text-align: center;
     }
 }
 
