@@ -857,46 +857,44 @@ class ContactFormManager {
 
             // Create clean template parameters
             const finalTemplateParams = {
-                // Core form fields
-                name: finalName,
-                email: finalEmail,
-                company: finalCompany,
-                budget: finalBudget,
-                service: finalService,
-                timeline: templateParams.timeline || '',
-                message: finalMessage,
+                // Simple, basic field mapping for EmailJS
+                message: `
+New Contact Form Submission:
+
+Name: ${finalName}
+Email: ${finalEmail}
+Company: ${finalCompany}
+Budget: ${finalBudget}
+Service: ${finalService}
+Timeline: ${templateParams.timeline || 'Not specified'}
+
+Message:
+${finalMessage}
+
+---
+Submitted: ${templateParams.timestamp}
+From: ${templateParams.page_url}
+                `,
                 
-                // EmailJS standard variables
+                // Standard EmailJS fields
                 from_name: finalName || 'Website Visitor',
-                from_email: finalEmail || 'noreply@example.com',
-                reply_to: finalEmail || 'noreply@example.com',
-                user_name: finalName || 'Website Visitor',
-                user_email: finalEmail || 'noreply@example.com',
+                from_email: finalEmail || 'noreply@gabrieletupini.dev',
+                reply_to: finalEmail || 'noreply@gabrieletupini.dev',
                 to_name: 'Gabriele Tupini',
+                subject: `Contact Form: ${finalService || 'New Inquiry'}`,
                 
-                // Alternative naming conventions
-                contact_name: finalName,
-                contact_email: finalEmail,
-                contact_company: finalCompany,
-                contact_budget: finalBudget,
-                contact_service: finalService,
-                contact_message: finalMessage,
-                
-                // Project details
-                project_budget: finalBudget || 'Not specified',
-                service_type: finalService || 'Not specified',
-                project_timeline: templateParams.timeline || 'Not specified',
-                company_name: finalCompany || 'Not specified',
-                
-                // Meta information
-                timestamp: templateParams.timestamp,
-                user_agent: templateParams.user_agent,
-                page_url: templateParams.page_url
+                // Individual fields for template flexibility
+                user_name: finalName,
+                user_email: finalEmail,
+                user_company: finalCompany,
+                user_budget: finalBudget,
+                user_service: finalService,
+                user_timeline: templateParams.timeline || 'Not specified',
+                user_message: finalMessage
             };
 
             console.log('Final template params being sent:', finalTemplateParams);
-
-            console.log('Sending EmailJS with params:', templateParams); // Debug log
+            console.log('Raw message that will be sent:', finalTemplateParams.message);
 
             // Send email via EmailJS
             await emailjs.send(
