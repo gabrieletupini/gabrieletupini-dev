@@ -810,35 +810,91 @@ class ContactFormManager {
             const formData = new FormData(this.form);
             const templateParams = {};
 
+            // Debug: Log all form fields before processing
+            console.log('Form elements found:', this.form.elements);
+            console.log('FormData entries:');
             for (let [key, value] of formData.entries()) {
+                console.log(`  ${key}: "${value}"`);
                 templateParams[key] = value;
             }
+
+            // Also get values directly from form elements as backup
+            const nameField = this.form.querySelector('#name, input[name="name"]');
+            const emailField = this.form.querySelector('#email, input[name="email"]');
+            const companyField = this.form.querySelector('#company, input[name="company"]');
+            const budgetField = this.form.querySelector('#budget, select[name="budget"]');
+            const serviceField = this.form.querySelector('#service, select[name="service"]');
+            const messageField = this.form.querySelector('#message, textarea[name="message"]');
+
+            console.log('Direct field values:');
+            console.log('Name:', nameField?.value || 'NOT FOUND');
+            console.log('Email:', emailField?.value || 'NOT FOUND');
+            console.log('Company:', companyField?.value || 'NOT FOUND');
+            console.log('Budget:', budgetField?.value || 'NOT FOUND');
+            console.log('Service:', serviceField?.value || 'NOT FOUND');
+            console.log('Message:', messageField?.value || 'NOT FOUND');
+
+            // Ensure critical fields are captured
+            if (nameField?.value) templateParams.name = nameField.value;
+            if (emailField?.value) templateParams.email = emailField.value;
+            if (companyField?.value) templateParams.company = companyField.value;
+            if (budgetField?.value) templateParams.budget = budgetField.value;
+            if (serviceField?.value) templateParams.service = serviceField.value;
+            if (messageField?.value) templateParams.message = messageField.value;
 
             // Add additional data
             templateParams.timestamp = new Date().toISOString();
             templateParams.user_agent = navigator.userAgent;
             templateParams.page_url = window.location.href;
 
-            // Ensure all required fields are properly mapped
-            templateParams.from_name = templateParams.name || 'Unknown';
-            templateParams.from_email = templateParams.email || 'noreply@example.com';
-            templateParams.reply_to = templateParams.email || 'noreply@example.com';
-            templateParams.user_name = templateParams.name || 'Unknown';
-            templateParams.user_email = templateParams.email || 'noreply@example.com';
-            templateParams.project_budget = templateParams.budget || 'Not specified';
-            templateParams.service_type = templateParams.service || 'Not specified';
-            templateParams.project_timeline = templateParams.timeline || 'Not specified';
-            templateParams.company_name = templateParams.company || 'Not specified';
-            
-            // Alternative variable names that might be used in the template
-            templateParams.to_name = 'Gabriele Tupini';
-            templateParams.contact_name = templateParams.name;
-            templateParams.contact_email = templateParams.email;
-            templateParams.contact_company = templateParams.company;
-            templateParams.contact_budget = templateParams.budget;
-            templateParams.contact_service = templateParams.service;
-            templateParams.contact_timeline = templateParams.timeline;
-            templateParams.contact_message = templateParams.message;
+            // Ensure all required fields are properly mapped with explicit values
+            const finalName = templateParams.name || nameField?.value || '';
+            const finalEmail = templateParams.email || emailField?.value || '';
+            const finalCompany = templateParams.company || companyField?.value || '';
+            const finalBudget = templateParams.budget || budgetField?.value || '';
+            const finalService = templateParams.service || serviceField?.value || '';
+            const finalMessage = templateParams.message || messageField?.value || '';
+
+            // Create clean template parameters
+            const finalTemplateParams = {
+                // Core form fields
+                name: finalName,
+                email: finalEmail,
+                company: finalCompany,
+                budget: finalBudget,
+                service: finalService,
+                timeline: templateParams.timeline || '',
+                message: finalMessage,
+                
+                // EmailJS standard variables
+                from_name: finalName || 'Website Visitor',
+                from_email: finalEmail || 'noreply@example.com',
+                reply_to: finalEmail || 'noreply@example.com',
+                user_name: finalName || 'Website Visitor',
+                user_email: finalEmail || 'noreply@example.com',
+                to_name: 'Gabriele Tupini',
+                
+                // Alternative naming conventions
+                contact_name: finalName,
+                contact_email: finalEmail,
+                contact_company: finalCompany,
+                contact_budget: finalBudget,
+                contact_service: finalService,
+                contact_message: finalMessage,
+                
+                // Project details
+                project_budget: finalBudget || 'Not specified',
+                service_type: finalService || 'Not specified',
+                project_timeline: templateParams.timeline || 'Not specified',
+                company_name: finalCompany || 'Not specified',
+                
+                // Meta information
+                timestamp: templateParams.timestamp,
+                user_agent: templateParams.user_agent,
+                page_url: templateParams.page_url
+            };
+
+            console.log('Final template params being sent:', finalTemplateParams);
 
             console.log('Sending EmailJS with params:', templateParams); // Debug log
 
@@ -846,7 +902,7 @@ class ContactFormManager {
             await emailjs.send(
                 CONFIG.emailjs.serviceId,
                 CONFIG.emailjs.templateId,
-                templateParams
+                finalTemplateParams
             );
 
             // Show success message
@@ -860,8 +916,8 @@ class ContactFormManager {
 
             // Track form submission
             this.trackEvent('contact_form_submit', {
-                service: templateParams.service,
-                budget: templateParams.budget
+                service: finalTemplateParams.service,
+                budget: finalTemplateParams.budget
             });
 
         } catch (error) {
